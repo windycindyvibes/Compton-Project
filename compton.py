@@ -58,7 +58,6 @@ def ComptonScattering(photon_momentum, electron_velocity):
 
     photon_momentum_1 = LorentzBoost(photon_momentum, fluid_betavec)
 
-    # TASK: add Compton scattering
     # 1. P1 = photon_momentum_1 -- four-momentum of the photon (dimensionless) in the frame of the electron (fluid)
     # 2. E1 = photon_momentum_1[0] -- dimensionless energy of the photon in the frame of the electron (before the scattering)
     # 3. SCATTERING -> E2 -- energy of the photon after the scattering (depends on theta)
@@ -88,3 +87,83 @@ def ComptonScattering(photon_momentum, electron_velocity):
     photon_momentum_lab_2 = LorentzBoost(photon_momentum_2, -fluid_betavec)
 
     return photon_momentum_lab_2
+
+
+def AdvancePhoton(
+    photon_pos,
+    photon_mom,
+    tau,
+    time,
+    dt,
+    Vx,
+    Vy,
+    Vz,
+    xmin,
+    xmax,
+    ymin,
+    ymax,
+    sx,
+    sy,
+    record_history=False,
+):
+    """
+    Arguments:
+        - tau: optical depth (probability) for a distance of 1000 units
+
+    Note:
+    Make sure q is smaller than 1 for the given dt.
+    (q = probability of scattering per timestep)
+    """
+    photon_pos_array = []
+    photon_mom_array = []
+    if record_history:
+        photon_mom_array.append(photon_mom)
+        photon_pos_array.append(photon_pos)
+
+    rng = np.random.default_rng()
+    q = tau * dt / 1000.0
+
+    def advance(pos, mom):
+        newpos = pos.copy()
+        newmom = mom.copy()
+
+        # draw a random number
+        rand = rng.random()
+        if rand < q:
+            print("scatter")
+            xph, yph, zph = newpos
+            ixph = int((xph - xmin) * sx / (xmax - xmin))
+            iyph = int((yph - ymin) * sy / (ymax - ymin))
+            vx = Vx[iyph, ixph]
+            vy = Vy[iyph, ixph]
+            vz = Vz[iyph, ixph]
+            Gamma = 1 / np.sqrt(1 - vx**2 - vy**2 - vz**2)
+            newmom = ComptonScattering(newmom, np.array([Gamma, vx, vy, vz]))
+            # newmom = np.array([vx, vy, vz])
+
+        # advance photon position
+        newpos = pos + (newmom[1:] / newmom[0]) * dt
+
+        # boundary conditions:
+        if newpos[0] < xmin:
+            newpos[0] += xmax - xmin
+        if newpos[0] > xmax:
+            newpos[0] -= xmax - xmin
+        if newpos[1] < ymin:
+            newpos[1] += ymax - ymin
+        if newpos[1] > ymax:
+            newpos[1] -= ymax - ymin
+
+        return newpos, newmom
+
+    photon_newpos = photon_pos.copy()
+    photon_newmom = photon_mom.copy()
+    for _ in range(int(time / dt)):
+        photon_newpos, photon_newmom = advance(photon_newpos, photon_newmom)
+        if record_history:
+            photon_pos_array = np.vstack([photon_pos_array, photon_newpos])
+            photon_mom_array = np.vstack([photon_mom_array, photon_newmom])
+
+    if record_history:
+        return photon_pos_array, photon_mom_array
+    return photon_newpos, photon_newmom
