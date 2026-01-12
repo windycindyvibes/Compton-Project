@@ -130,7 +130,6 @@ def AdvancePhoton(
         # draw a random number
         rand = rng.random()
         if rand < q:
-            print("scatter")
             xph, yph, zph = newpos
             ixph = int((xph - xmin) * sx / (xmax - xmin))
             iyph = int((yph - ymin) * sy / (ymax - ymin))
